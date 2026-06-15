@@ -11,7 +11,11 @@ import {
   AlertTriangle, 
   ShieldCheck, 
   X,
-  Plus
+  Bell,
+  BellOff,
+  Check,
+  RotateCcw,
+  Award
 } from 'lucide-react';
 
 const START_DATE = new Date(2026, 5, 25); // June 25, 2026
@@ -101,16 +105,13 @@ const TASKS = {
 export default function App() {
   // Get date state (allows simulation)
   const [currentDate, setCurrentDate] = useState(() => {
-    // If today is outside active range, mock to first active day for demonstration
     const now = new Date();
     const startCompare = new Date(2026, 5, 25);
     const endCompare = new Date(2026, 7, 31);
-    
-    // Check if current year/date fits. If not, default simulation to start of fertilization period (2026-06-25)
     if (now >= startCompare && now <= endCompare) {
       return now;
     }
-    return new Date(2026, 5, 25); // 2026-06-25 is a Thursday
+    return new Date(2026, 5, 25);
   });
 
   const [realDate] = useState(() => new Date());
@@ -118,6 +119,17 @@ export default function App() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstallGuide, setShowInstallGuide] = useState(false);
   const [notification, setNotification] = useState(null);
+  const [notifPermission, setNotifPermission] = useState('default');
+
+  // Load completed tasks status from LocalStorage
+  const [completedTasks, setCompletedTasks] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ogrodnik_completed_tasks');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
 
   // Check if current date is inside active window
   const isDateValid = (date) => {
@@ -128,7 +140,7 @@ export default function App() {
   };
 
   const getWeekDay = (date) => {
-    return date.getDay(); // 0 = Sunday, 6 = Saturday
+    return date.getDay();
   };
 
   const getTaskForDate = (date) => {
@@ -136,10 +148,98 @@ export default function App() {
     return TASKS[day];
   };
 
+  // Sync completion status to LocalStorage
+  const handleTaskToggle = (dateStr, isCompleted) => {
+    const updated = { ...completedTasks, [dateStr]: isCompleted };
+    setCompletedTasks(updated);
+    localStorage.setItem('ogrodnik_completed_tasks', JSON.stringify(updated));
+    if (isCompleted) {
+      showToast('Zadanie zostało oznaczone jako wykonane! 🎉');
+    } else {
+      showToast('Cofnięto wykonanie zadania.');
+    }
+  };
+
   // Reset Tuesday acknowledgement when date changes
   useEffect(() => {
     setTuesdayAcknowledged(false);
   }, [currentDate]);
+
+  // Sync Notification permission
+  useEffect(() => {
+    if ('Notification' in window) {
+      setNotifPermission(Notification.permission);
+    }
+  }, []);
+
+  const handleRequestNotification = async () => {
+    if (!('Notification' in window)) {
+      showToast('Ta przeglądarka nie obsługuje powiadomień.');
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+    setNotifPermission(permission);
+
+    if (permission === 'granted') {
+      showToast('Dziękujemy! Powiadomienia zostały włączone.');
+      // Direct welcome notification
+      triggerNotificationNow("Asystent Nawożenia", "Włączyłeś przypomnienia. Otrzymasz alerty o nawożeniu!");
+    } else {
+      showToast('Powiadomienia zostały zablokowane w przeglądarce.');
+    }
+  };
+
+  const triggerNotificationNow = (title, body) => {
+    if (notifPermission !== 'granted') return;
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then((reg) => {
+        reg.showNotification(title, {
+          body: body,
+          icon: '/icon.jpg',
+          badge: '/icon.jpg',
+          vibrate: [100, 50, 100],
+          tag: 'ogrodnik-now'
+        });
+      }).catch(() => {
+        new Notification(title, { body });
+      });
+    } else {
+      new Notification(title, { body });
+    }
+  };
+
+  const handleTestNotificationDelay = () => {
+    if (notifPermission !== 'granted') {
+      handleRequestNotification();
+      return;
+    }
+
+    showToast('Powiadomienie testowe push nadejdzie za 5 sekund...');
+    
+    setTimeout(() => {
+      const task = getTaskForDate(currentDate);
+      const title = "🌿 Czas na nawożenie!";
+      const body = `Dzisiejszy preparat: ${task.preparat} (${task.metoda}). Cel: ${task.cel}`;
+      
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then((reg) => {
+          reg.showNotification(title, {
+            body: body,
+            icon: '/icon.jpg',
+            badge: '/icon.jpg',
+            vibrate: [200, 100, 200],
+            tag: 'ogrodnik-test-delay'
+          });
+        }).catch(() => {
+          new Notification(title, { body });
+        });
+      } else {
+        new Notification(title, { body });
+      }
+    }, 5000);
+  };
 
   // Handle PWA installation
   useEffect(() => {
@@ -196,6 +296,9 @@ export default function App() {
   const isValid = isDateValid(currentDate);
   const isTodayTuesday = getWeekDay(currentDate) === 2;
 
+  const currentDateKey = dateToInputValue(currentDate);
+  const isCurrentTaskCompleted = !!completedTasks[currentDateKey];
+
   // Generate 3 future days preview
   const getUpcomingDays = () => {
     const list = [];
@@ -214,12 +317,12 @@ export default function App() {
   const upcomingDays = getUpcomingDays();
 
   // Format date to YYYY-MM-DD for input
-  const dateToInputValue = (date) => {
+  function dateToInputValue(date) {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
     const d = String(date.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
-  };
+  }
 
   return (
     <div className="max-w-md mx-auto px-4 py-6 flex flex-col min-h-screen justify-between gap-6 pb-20 select-none">
@@ -396,12 +499,17 @@ export default function App() {
             )}
 
             {/* Today's Fertilizer Card */}
-            <section className={`glass-card rounded-3xl p-5 flex flex-col gap-4 relative overflow-hidden transition-all duration-500 border-l-4 ${activeTask.isTuesday ? 'border-l-amber-500' : 'border-l-eco-primary'}`}>
+            <section className={`glass-card rounded-3xl p-5 flex flex-col gap-4 relative overflow-hidden transition-all duration-500 border-l-4 ${
+              isCurrentTaskCompleted ? 'border-l-eco-secondary bg-eco-secondary/5' : activeTask.isTuesday ? 'border-l-amber-500' : 'border-l-eco-primary'
+            }`}>
               <div className="absolute top-0 right-0 w-24 h-24 bg-eco-primary/5 rounded-full blur-3xl pointer-events-none"></div>
               
               <div className="flex justify-between items-start">
-                <span className="text-[11px] font-mono bg-eco-primary/10 text-eco-primary border border-eco-primary/20 px-2.5 py-1 rounded-full font-bold uppercase">
-                  DZIŚ: {activeTask.dayName}
+                <span className={`text-[11px] font-mono border px-2.5 py-1 rounded-full font-bold uppercase flex items-center gap-1 ${
+                  isCurrentTaskCompleted ? 'bg-eco-secondary/10 text-eco-secondary border-eco-secondary/20' : 'bg-eco-primary/10 text-eco-primary border-eco-primary/20'
+                }`}>
+                  {isCurrentTaskCompleted && <Check className="w-3 h-3" />}
+                  DZIŚ: {activeTask.dayName} {isCurrentTaskCompleted && '(ZROBIONE)'}
                 </span>
                 <span className="text-[10px] font-mono text-eco-text/50">
                   Karta {currentDate.getDate()}/{currentDate.getMonth()+1}
@@ -443,6 +551,25 @@ export default function App() {
                 {activeTask.desc}
               </div>
 
+              {/* Task Completion Control Panel */}
+              <div className="border-t border-eco-primary/10 pt-3 mt-1 flex gap-2">
+                {!isCurrentTaskCompleted ? (
+                  <button
+                    onClick={() => handleTaskToggle(currentDateKey, true)}
+                    className="flex-1 py-2.5 bg-eco-primary hover:bg-eco-primary/80 active:scale-[0.98] text-eco-bg font-mono text-xs font-extrabold rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-glow"
+                  >
+                    <Check className="w-4 h-4 stroke-[3]" /> POTWIERDŹ WYKONANIE
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleTaskToggle(currentDateKey, false)}
+                    className="flex-1 py-2.5 bg-eco-surface border border-eco-alert/45 hover:bg-eco-alert/10 active:scale-[0.98] text-eco-alert font-mono text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <RotateCcw className="w-4 h-4" /> COFNIJ WYKONANIE
+                  </button>
+                )}
+              </div>
+
               {activeTask.isTuesday && !tuesdayAcknowledged && (
                 <div className="absolute inset-0 bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center p-4 text-center gap-3">
                   <AlertOctagon className="w-10 h-10 text-eco-alert animate-bounce" />
@@ -457,6 +584,55 @@ export default function App() {
             </section>
           </>
         )}
+
+        {/* Local Notifications Configuration Section */}
+        <section className="glass-card p-4 rounded-2xl flex flex-col gap-3">
+          <div className="flex justify-between items-center">
+            <h3 className="text-xs font-mono text-eco-secondary/80 font-bold uppercase tracking-wider flex items-center gap-1.5">
+              <Bell className="w-4 h-4 text-eco-primary" />
+              POWIADOMIENIA PUSH
+            </h3>
+            {notifPermission === 'granted' ? (
+              <span className="text-[9px] font-mono text-eco-secondary bg-eco-secondary/10 border border-eco-secondary/20 px-2 py-0.5 rounded-full font-bold">
+                WŁĄCZONE
+              </span>
+            ) : (
+              <span className="text-[9px] font-mono text-eco-alert bg-eco-alert/10 border border-eco-alert/20 px-2 py-0.5 rounded-full font-bold">
+                WYŁĄCZONE
+              </span>
+            )}
+          </div>
+
+          <p className="text-[10px] font-mono text-eco-text/65 leading-relaxed">
+            Włącz codzienne przypomnienia o zabiegach w telefonie, aby nie ominąć optymalnego okna nawożenia.
+          </p>
+
+          <div className="flex gap-2 mt-1">
+            {notifPermission !== 'granted' ? (
+              <button
+                onClick={handleRequestNotification}
+                className="flex-1 py-2 bg-eco-surface border border-eco-primary/30 text-eco-primary text-xs font-mono rounded-xl hover:bg-eco-primary/10 active:scale-95 transition-all flex items-center justify-center gap-1"
+              >
+                <Bell className="w-3.5 h-3.5" /> Włącz powiadomienia
+              </button>
+            ) : (
+              <button
+                onClick={() => showToast('Powiadomienia są już aktywne w tej przeglądarce.')}
+                className="flex-1 py-2 bg-eco-surface border border-eco-secondary/20 text-eco-secondary/60 text-xs font-mono rounded-xl cursor-default flex items-center justify-center gap-1"
+                disabled
+              >
+                <ShieldCheck className="w-3.5 h-3.5" /> Powiadomienia włączone
+              </button>
+            )}
+            <button
+              onClick={handleTestNotificationDelay}
+              className="px-3.5 py-2 bg-eco-surface border border-eco-primary/10 text-eco-text text-xs font-mono rounded-xl hover:border-eco-primary/45 active:scale-95 transition-all flex items-center justify-center gap-1"
+              title="Testuj 5-sekundowe opóźnienie"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Test Push (5s)
+            </button>
+          </div>
+        </section>
 
         {/* Schedule / Calendar (Next +3 Days) */}
         <section className="flex flex-col gap-2.5">
@@ -473,6 +649,9 @@ export default function App() {
               const isTuesdayCard = dayOfWeek === 2;
               const formattedDate = `${String(item.date.getDate()).padStart(2, '0')}.${String(item.date.getMonth() + 1).padStart(2, '0')}`;
               
+              const itemKey = dateToInputValue(item.date);
+              const isItemCompleted = !!completedTasks[itemKey];
+
               let statusLabel = '';
               if (idx === 0) statusLabel = 'Jutro';
               else if (idx === 1) statusLabel = 'Pojutrze';
@@ -483,12 +662,16 @@ export default function App() {
                   key={idx}
                   onClick={() => setCurrentDate(item.date)}
                   className={`glass-card p-3 rounded-xl flex flex-col justify-between gap-2 border-t-2 text-left active:scale-95 transition-all cursor-pointer relative overflow-hidden ${
-                    isTuesdayCard ? 'border-t-eco-alert bg-eco-alert/5' : 'border-t-eco-primary hover:border-eco-primary/40'
+                    isItemCompleted 
+                      ? 'border-t-eco-secondary bg-eco-secondary/5' 
+                      : isTuesdayCard 
+                        ? 'border-t-eco-alert bg-eco-alert/5' 
+                        : 'border-t-eco-primary hover:border-eco-primary/40'
                   }`}
                 >
                   <div>
                     <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-mono text-eco-primary font-bold">
+                      <span className={`text-[10px] font-mono font-bold ${isItemCompleted ? 'text-eco-secondary' : 'text-eco-primary'}`}>
                         {statusLabel}
                       </span>
                       <span className="text-[8px] font-mono text-eco-text/40">
@@ -509,7 +692,9 @@ export default function App() {
                     <span className="text-[8px] font-mono text-eco-text/50 truncate max-w-[50px]">
                       {item.task.dawkowanie.split(' ')[0]} {item.task.dawkowanie.split(' ')[1] || ''}
                     </span>
-                    {isTuesdayCard ? (
+                    {isItemCompleted ? (
+                      <Check className="w-3 h-3 text-eco-secondary stroke-[3]" />
+                    ) : isTuesdayCard ? (
                       <span className="w-1.5 h-1.5 bg-eco-alert rounded-full animate-ping"></span>
                     ) : (
                       item.task.metoda.includes('Oprysk') ? <Sprout className="w-2.5 h-2.5 text-eco-secondary" /> : <Droplets className="w-2.5 h-2.5 text-eco-primary" />
