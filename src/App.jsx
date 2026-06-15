@@ -120,6 +120,7 @@ export default function App() {
   const [showInstallGuide, setShowInstallGuide] = useState(false);
   const [notification, setNotification] = useState(null);
   const [notifPermission, setNotifPermission] = useState('default');
+  const [allowFutureConfirm, setAllowFutureConfirm] = useState(false);
 
   // Load completed tasks status from LocalStorage
   const [completedTasks, setCompletedTasks] = useState(() => {
@@ -137,6 +138,13 @@ export default function App() {
     const start = new Date(START_DATE.getFullYear(), START_DATE.getMonth(), START_DATE.getDate());
     const end = new Date(END_DATE.getFullYear(), END_DATE.getMonth(), END_DATE.getDate());
     return d >= start && d <= end;
+  };
+
+  // Check if simulated date is in the future relative to real device date
+  const isFutureDate = (date) => {
+    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const real = new Date(realDate.getFullYear(), realDate.getMonth(), realDate.getDate());
+    return d > real;
   };
 
   const getWeekDay = (date) => {
@@ -183,7 +191,6 @@ export default function App() {
 
     if (permission === 'granted') {
       showToast('Dziękujemy! Powiadomienia zostały włączone.');
-      // Direct welcome notification
       triggerNotificationNow("Asystent Nawożenia", "Włączyłeś przypomnienia. Otrzymasz alerty o nawożeniu!");
     } else {
       showToast('Powiadomienia zostały zablokowane w przeglądarce.');
@@ -434,6 +441,19 @@ export default function App() {
             </button>
           </div>
 
+          {/* Unlock Future Confirm Switch (Developer Mode) */}
+          <label className="flex items-center gap-2 justify-center mt-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={allowFutureConfirm}
+              onChange={(e) => setAllowFutureConfirm(e.target.checked)}
+              className="w-4 h-4 rounded border-eco-primary/20 text-eco-primary focus:ring-0 focus:ring-offset-0 bg-transparent cursor-pointer"
+            />
+            <span className="text-[10px] font-mono text-eco-text/75">
+              Odblokuj potwierdzanie w przyszłości (test)
+            </span>
+          </label>
+
           <div className="text-center mt-0.5">
             <span className="text-[11px] font-mono text-eco-text/90 bg-eco-surface/80 px-3 py-1 rounded-full border border-eco-primary/10">
               {formatDateString(currentDate)}
@@ -552,8 +572,17 @@ export default function App() {
               </div>
 
               {/* Task Completion Control Panel */}
-              <div className="border-t border-eco-primary/10 pt-3 mt-1 flex gap-2">
-                {!isCurrentTaskCompleted ? (
+              <div className="border-t border-eco-primary/10 pt-3 mt-1 flex flex-col gap-2">
+                {isFutureDate(currentDate) && !allowFutureConfirm ? (
+                  <div className="bg-eco-surface/80 border border-amber-500/20 p-3 rounded-xl flex flex-col gap-1">
+                    <span className="text-[10px] font-mono text-amber-500 flex items-center gap-1.5 font-bold">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> ZABLOKOWANE (ZADANIE W PRZYSZŁOŚCI)
+                    </span>
+                    <span className="text-[9px] font-mono text-eco-text/60">
+                      Realna data urządzenia to {formatDateString(realDate)}. Wykonanie możesz potwierdzić w dniu zabiegu. W celach testowych odblokuj przełącznik w panelu symulacji.
+                    </span>
+                  </div>
+                ) : !isCurrentTaskCompleted ? (
                   <button
                     onClick={() => handleTaskToggle(currentDateKey, true)}
                     className="flex-1 py-2.5 bg-eco-primary hover:bg-eco-primary/80 active:scale-[0.98] text-eco-bg font-mono text-xs font-extrabold rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-glow"
