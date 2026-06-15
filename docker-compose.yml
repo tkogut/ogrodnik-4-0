@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  fertilizer-assistant:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ogrodnik-asystent
+    ports:
+      - "8080:80"
+    restart: always
+    environment:
+      - NODE_ENV=production
