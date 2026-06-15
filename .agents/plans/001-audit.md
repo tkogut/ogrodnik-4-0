@@ -28,8 +28,9 @@
 - **Build Success**: Completed cleanly (`vite build` compiled in ~2 seconds).
 - **Docker Image Build**: Completed with return code 0 (`ogrodnik-asystent:test`).
 
-## 5. VPS Deployment Audit
+## 5. VPS Deployment & Traefik HTTPS Audit
 - **Deployment Script**: Checked and executed `/root/ogrodnik-4-0/.agents/skills/vps-ops/scripts/deploy-helper.sh -b main` on the remote server (`187.124.165.99`).
-- **Container Status**: Service `fertilizer-assistant` successfully built and container `ogrodnik-asystent` is `Up` and listening on port `8080`.
-- **System Reclaimed Space**: Reclaimed `5.165GB` of space during docker system prune.
-- **Log Verification**: Nginx successfully booted, listening on port 80 (forwarded from 8080), and serving `index.html`, css/js assets, and `manifest.json` with status code 200.
+- **Traefik Integration**: Reconfigured `docker-compose.yml` to route via Traefik network `traefik-proxy` with routing labels for `Host(\`ogrodnik.srv1490214.hstgr.cloud\`)`, `websecure` entrypoint, and `letsencrypt` cert resolver. External port bindings removed for enhanced security.
+- **Container Status**: Container `ogrodnik-asystent` is `Up` and has joined `traefik-proxy` with dynamic IP allocation.
+- **SSL Verification**: Run `curl -I https://ogrodnik.srv1490214.hstgr.cloud` returning `HTTP/2 200` with correct custom headers (`cache-control: no-cache` / `server: nginx/1.31.1`), confirming HTTPS connection and automatic Let's Encrypt certificate acquisition.
+- **System Reclaimed Space**: Reclaimed `5.165GB` + `354.9MB` of space during docker system prune.
