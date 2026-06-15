@@ -27,3 +27,9 @@
 ## 4. Verification Check
 - **Build Success**: Completed cleanly (`vite build` compiled in ~2 seconds).
 - **Docker Image Build**: Completed with return code 0 (`ogrodnik-asystent:test`).
+
+## 5. VPS Deployment Audit
+- **Deployment Script**: Checked and executed `/root/ogrodnik-4-0/.agents/skills/vps-ops/scripts/deploy-helper.sh -b main` on the remote server (`187.124.165.99`).
+- **Container Status**: Service `fertilizer-assistant` successfully built and container `ogrodnik-asystent` is `Up` and listening on port `8080`.
+- **System Reclaimed Space**: Reclaimed `5.165GB` of space during docker system prune.
+- **Log Verification**: Nginx successfully booted, listening on port 80 (forwarded from 8080), and serving `index.html`, css/js assets, and `manifest.json` with status code 200.
